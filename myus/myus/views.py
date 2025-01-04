@@ -187,6 +187,9 @@ def leaderboard(request, hunt_id: int, slug: Optional[str] = None):
     team = get_team(user, hunt)
     is_organizer = user.is_authenticated and hunt.organizers.filter(id=user.id).exists()
 
+    if hunt.leaderboard_style == Hunt.LeaderboardStyle.HIDDEN and not is_organizer:
+        raise Http404()
+
     # for the sake of simplicity, assume teams won't end up with two correct guesses for a puzzle
     teams = hunt.teams.annotate(
         score=Coalesce(
@@ -221,14 +224,12 @@ def leaderboard(request, hunt_id: int, slug: Optional[str] = None):
     #   print(teams.query)
     if hunt.leaderboard_style == Hunt.LeaderboardStyle.SPEEDRUN:
         teams = teams.order_by("-score", "solve_time", "last_solve")
-        template = "leaderboard_SPD.html"
     else:
         teams = teams.order_by("-score", "-solve_count", "last_solve")
-        template = "leaderboard.html"
 
     return render(
         request,
-        template,
+        "leaderboard.html",
         {
             "hunt": hunt,
             "team": team,
