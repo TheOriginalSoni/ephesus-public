@@ -14,6 +14,10 @@
         Error: {{ error }}
     {% endif %}
 
+    {% if hunt.is_archived %}
+        <p>This hunt is in archive mode. New teams can still be created, but the leaderboard is frozen and all puzzles and solutions are unlocked.</p>
+    {% endif %}
+
     {% if is_organizer %}
         <p>You are an organizer of this hunt. <a href="{% url 'new_puzzle' hunt.id hunt.slug %}">add puzzle</a></p>
     {% elif team %}

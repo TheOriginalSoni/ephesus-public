@@ -4,6 +4,10 @@
 {% endblock %}
 {% block main %}
     <h1>Edit Hunt</h1>
+    {% if hunt.is_archived %}
+        <p>This hunt is in archive mode. New teams can still be created, but the leaderboard is frozen and all puzzles and solutions are unlocked.</p>
+    {% endif %}
+
     <form method="post">
         {% csrf_token %}
         {{ form.non_field_errors }}

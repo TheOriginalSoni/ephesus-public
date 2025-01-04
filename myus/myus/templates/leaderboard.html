@@ -7,6 +7,10 @@
 {% block main %}
     <h1>Hunt: {{ hunt.name }} / Leaderboard</h1>
 
+    {% if hunt.is_archived %}
+        <p>This hunt is in archive mode. New teams can still be created, but the leaderboard is frozen and all puzzles and solutions are unlocked.</p>
+    {% endif %}
+
     {% if teams %}
         {% if hunt.leaderboard_style == "SPD" %}
             <table class="classic">

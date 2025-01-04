@@ -8,6 +8,8 @@ from django.core.validators import MinValueValidator
 
 import django.urls as urls
 
+from datetime import datetime, timezone
+
 DEFAULT_GUESS_LIMIT = 20
 
 
@@ -34,7 +36,11 @@ class Hunt(models.Model):
     end_time = models.DateTimeField(
         blank=True,
         null=True,
-        help_text="(Not implemented) End date of the hunt. If empty, the hunt will always be open.",
+        help_text="End date of the hunt. If <b>Archive after end date</b> is checked, hunt will be put in archive mode after this date.",
+    )
+    archive_after_end_date = models.BooleanField(
+        default=False,
+        help_text="Set hunt to archive mode after end date (teams can still be created and progress, but leaderboard is frozen and all puzzles are unlocked).",
     )
     organizers = models.ManyToManyField(User, related_name="organizing_hunts")
     invited_organizers = models.ManyToManyField(
@@ -68,7 +74,10 @@ class Hunt(models.Model):
     class SolutionStyle(models.TextChoices):
         VISIBLE = "VIS", "Solutions are always visible"
         HIDDEN = "HID", "Solutions are always hidden"
-        AFTER_SOLVE = "SOL", "Solution displayed after puzzle is solved"
+        AFTER_SOLVE = (
+            "SOL",
+            "Solution displayed after puzzle is solved (or when hunt is in archive mode)",
+        )
 
     solution_style = models.CharField(
         max_length=3, choices=SolutionStyle, default=SolutionStyle.HIDDEN
@@ -76,8 +85,18 @@ class Hunt(models.Model):
 
     slug = models.SlugField(help_text="A short, unique identifier for the hunt.")
 
+    def is_archived(self):
+        return (
+            self.end_time is not None
+            and self.archive_after_end_date
+            and self.end_time < datetime.now(timezone.utc)
+        )
+
     def public_puzzles(self):
-        return self.puzzles.filter(progress_threshold__lte=self.progress_floor)
+        if self.is_archived():
+            return self.puzzles
+        else:
+            return self.puzzles.filter(progress_threshold__lte=self.progress_floor)
 
     def __str__(self):
         return self.name
