@@ -5,7 +5,6 @@ from django.contrib.auth.views import (
     PasswordChangeView,
     PasswordChangeDoneView,
 )
-
 from . import views
 
 urlpatterns = [
@@ -15,6 +14,7 @@ urlpatterns = [
     path(
         "change-password",
         PasswordChangeView.as_view(template_name="change-password.html"),
+        name="password_change",
     ),
     path(
         "change-password/done",
