@@ -332,6 +332,7 @@ def view_puzzle(
             or (
                 hunt.solution_style == Hunt.SolutionStyle.AFTER_SOLVE
                 and hunt.is_archived()
+                and team is None
             )
         ):
             show_solution = True
