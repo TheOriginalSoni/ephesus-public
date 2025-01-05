@@ -3,7 +3,7 @@ from typing import Optional
 
 from django import urls
 from django.contrib.auth.decorators import login_required
-from django.db.models import OuterRef, Sum, Subquery, Count, Q, F, DurationField
+from django.db.models import OuterRef, Sum, Subquery, Count, Q, F, DurationField, Max
 from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, JsonResponse
 from django.http import HttpResponse
@@ -187,28 +187,27 @@ def leaderboard(request, hunt_id: int, slug: Optional[str] = None):
     team = get_team(user, hunt)
     is_organizer = user.is_authenticated and hunt.organizers.filter(id=user.id).exists()
 
+    if hunt.leaderboard_style == Hunt.LeaderboardStyle.HIDDEN and not is_organizer:
+        raise Http404()
+
     # for the sake of simplicity, assume teams won't end up with two correct guesses for a puzzle
-    teams = hunt.teams.annotate(
-        score=Coalesce(
-            Subquery(
-                Guess.objects.filter(
-                    team=OuterRef("pk"),
-                    correct=True,
-                )
-                .values("team")
-                .annotate(score=Sum("puzzle__points"))
-                .values("score")
+    if hunt.is_archived():
+        correct_guess_Q = Q(guesses__correct=True, guesses__time__lte=hunt.end_time)
+        teams = hunt.teams.filter(creation_time__lte=hunt.end_time)
+    else:
+        correct_guess_Q = Q(guesses__correct=True)
+        teams = hunt.teams
+
+    teams = teams.annotate(
+        score=Coalesce(Sum("guesses__puzzle__points", filter=correct_guess_Q), 0),
+        solve_count=Count("guesses", filter=correct_guess_Q),
+        last_solve=Max(
+            "guesses__time",
+            filter=correct_guess_Q
+            & (
+                Q(guesses__puzzle__points__gt=0)
+                | Q(guesses__puzzle__progress_points__gt=0)
             ),
-            0,
-        ),
-        solve_count=Count("guesses", filter=Q(guesses__correct=True)),
-        last_solve=Subquery(
-            Guess.objects.filter(
-                team=OuterRef("pk"),
-                correct=True,
-            )
-            .order_by("-time")[:1]
-            .values("time")
         ),
         created_or_start=Greatest(F("creation_time"), hunt.start_time),
         solve_time=Greatest(
@@ -218,17 +217,14 @@ def leaderboard(request, hunt_id: int, slug: Optional[str] = None):
         ),
     )
 
-    #   print(teams.query)
     if hunt.leaderboard_style == Hunt.LeaderboardStyle.SPEEDRUN:
         teams = teams.order_by("-score", "solve_time", "last_solve")
-        template = "leaderboard_SPD.html"
     else:
         teams = teams.order_by("-score", "-solve_count", "last_solve")
-        template = "leaderboard.html"
 
     return render(
         request,
-        template,
+        "leaderboard.html",
         {
             "hunt": hunt,
             "team": team,
@@ -329,8 +325,14 @@ def view_puzzle(
 
     show_solution = False
     if puzzle.solution_url != "":
-        if hunt.solution_style == Hunt.SolutionStyle.VISIBLE or (
-            hunt.solution_style == Hunt.SolutionStyle.AFTER_SOLVE and solved
+        if (
+            hunt.solution_style == Hunt.SolutionStyle.VISIBLE
+            or is_organizer
+            or (hunt.solution_style == Hunt.SolutionStyle.AFTER_SOLVE and solved)
+            or (
+                hunt.solution_style == Hunt.SolutionStyle.AFTER_SOLVE
+                and hunt.is_archived()
+            )
         ):
             show_solution = True
 
@@ -581,6 +583,7 @@ def edit_hunt(
         "edit_hunt.html",
         {
             "form": form,
+            "hunt": hunt,
         },
     )
 

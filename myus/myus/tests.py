@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from http import HTTPStatus
 
 from django.urls import reverse
 from django.test import TestCase
 
 from myus.forms import NewHuntForm
-from myus.models import Hunt, Puzzle, User
+from myus.models import Hunt, Puzzle, User, Team, Guess
 
 
 class TestViewHunt(TestCase):
@@ -117,6 +117,8 @@ class TestNewHuntForm(TestCase):
             "slug": "test",
             "member_limit": 0,
             "guess_limit": 20,
+            "solution_style": Hunt.SolutionStyle.HIDDEN,
+            "leaderboard_style": Hunt.LeaderboardStyle.DEFAULT,
         }
 
     def test_hunt_form_accepts_start_time_in_iso_format(self):
@@ -176,3 +178,98 @@ class TestNewHuntForm(TestCase):
         form = NewHuntForm(data=self.shared_test_data)
         end_time_field = form.fields["end_time"]
         self.assertEqual(end_time_field.widget.input_type, "datetime-local")
+
+
+class TestArchiveMode(TestCase):
+    """Test archive mode"""
+
+    def setUp(self):
+        curr_time = datetime.now(timezone.utc)
+        self.archived_hunt = Hunt.objects.create(
+            name="Archived Hunt",
+            slug="archived-hunt",
+            end_time=curr_time - timedelta(minutes=15),
+            leaderboard_style=Hunt.LeaderboardStyle.DEFAULT,
+            solution_style=Hunt.SolutionStyle.AFTER_SOLVE,
+            archive_after_end_date=True,
+        )
+        self.archive_solved_puzzle = Puzzle.objects.create(
+            name="Test Puzzle",
+            slug="test-puzzle",
+            hunt=self.archived_hunt,
+            progress_threshold=0,
+            points=20,
+            solution_url="https://google.com",
+        )
+        Puzzle.objects.create(
+            name="Test Locked Puzzle", hunt=self.archived_hunt, progress_threshold=10
+        )
+
+        self.teams = []
+        for name, create_time, guess_time in [
+            ("Archived Team", -40, -30),
+            ("Late Guess", -40, -10),
+            ("Late Creation", -10, -5),
+        ]:
+            team = Team.objects.create(name=name, hunt=self.archived_hunt)
+            team.creation_time = curr_time + timedelta(minutes=create_time)
+            team.save()
+
+            guess = Guess.objects.create(
+                team=team,
+                puzzle=self.archive_solved_puzzle,
+                counts_as_guess=True,
+                correct=True,
+            )
+            guess.time = curr_time + timedelta(minutes=guess_time)
+            guess.save()
+            self.teams.append(team)
+
+        self.active_hunt = Hunt.objects.create(
+            name="Active Hunt 1",
+            slug="active-hunt-1",
+            end_time=curr_time + timedelta(minutes=15),
+            archive_after_end_date=True,
+        )
+
+    def test_is_archive(self):
+        self.assertEqual(self.archived_hunt.is_archived(), True)
+        self.assertEqual(self.active_hunt.is_archived(), False)
+
+    def test_puzzle_visibility(self):
+        # all puzzles are public in an archived hunt
+        self.assertEqual(self.archived_hunt.public_puzzles().count(), 2)
+        # team-visible in an archived hunt is still the same
+        self.assertEqual(self.teams[0].unlocked_puzzles().count(), 1)
+
+    def test_leaderboard(self):
+        res = self.client.get(
+            reverse(
+                "leaderboard", args=[self.archived_hunt.id, self.archived_hunt.slug]
+            )
+        )
+
+        # solves before the end time should count on leaderboard
+        self.assertContains(
+            res, "<td>Archived Team</td><td>20</td><td>1</td>", html=True
+        )
+        # solves after the end time don't count
+        self.assertContains(res, "<td>Late Guess</td><td>0</td><td>0</td>", html=True)
+        # teams created after the hunt end don't appear
+        self.assertNotContains(res, "Late Creation", html=True)
+
+    def test_solution_visibility(self):
+        res = self.client.get(
+            reverse(
+                "view_puzzle",
+                args=[
+                    self.archived_hunt.id,
+                    self.archived_hunt.slug,
+                    self.archive_solved_puzzle.id,
+                    self.archive_solved_puzzle.slug,
+                ],
+            )
+        )
+
+        # non-hidden solutions are visible after archiving
+        self.assertContains(res, '<a href="https://google.com">Solution</a>', html=True)

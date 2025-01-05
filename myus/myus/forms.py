@@ -101,6 +101,7 @@ class EditHuntForm(forms.ModelForm):
             "description",
             "start_time",
             "end_time",
+            "archive_after_end_date",
             "member_limit",
             "guess_limit",
             "leaderboard_style",
