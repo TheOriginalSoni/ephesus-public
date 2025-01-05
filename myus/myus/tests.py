@@ -201,8 +201,11 @@ class TestArchiveMode(TestCase):
             points=20,
             solution_url="https://google.com",
         )
-        Puzzle.objects.create(
-            name="Test Locked Puzzle", hunt=self.archived_hunt, progress_threshold=10
+        self.archive_locked_puzzle = Puzzle.objects.create(
+            name="Test Locked Puzzle",
+            hunt=self.archived_hunt,
+            progress_threshold=10,
+            slug="locked-puzzle",
         )
 
         self.teams = []
@@ -239,6 +242,20 @@ class TestArchiveMode(TestCase):
     def test_puzzle_visibility(self):
         # all puzzles are public in an archived hunt
         self.assertEqual(self.archived_hunt.public_puzzles().count(), 2)
+        res = self.client.get(
+            reverse(
+                "view_puzzle",
+                args=[
+                    self.archived_hunt.id,
+                    self.archived_hunt.slug,
+                    self.archive_locked_puzzle.id,
+                    self.archive_locked_puzzle.slug,
+                ],
+            )
+        )
+        self.assertContains(
+            res, "<h1>Puzzle: Test Locked Puzzle </h1>", status_code=200
+        )
         # team-visible in an archived hunt is still the same
         self.assertEqual(self.teams[0].unlocked_puzzles().count(), 1)
 

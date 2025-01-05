@@ -145,6 +145,8 @@ class Puzzle(models.Model):
     slug = models.SlugField(help_text="A short, unique identifier for the puzzle.")
 
     def is_viewable_by(self, team):
+        if self.hunt.is_archived() and not team:
+            return True
         if team:
             progress = team.progress()
         else:
