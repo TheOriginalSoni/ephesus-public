@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from http import HTTPStatus
 
 from django.urls import reverse
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from myus.forms import NewHuntForm
 from myus.models import Hunt, Puzzle, User, Team, Guess
@@ -91,7 +91,7 @@ class TestViewPuzzle(TestCase):
         self.assertRedirects(res, self.correct_url)
 
     def test_view_puzzle_with_ids_and_wrong_slugs_redirects_to_ids_and_correct_slugs(
-        self,
+            self,
     ):
         """Visiting the view_puzzle endpoint with IDs and the wrong slugs in URL redirects to URL with IDs and correct slugs"""
         res = self.client.get(
@@ -290,3 +290,26 @@ class TestArchiveMode(TestCase):
 
         # non-hidden solutions are visible after archiving
         self.assertContains(res, '<a href="https://google.com">Solution</a>', html=True)
+
+    @override_settings(APPEND_SLASH=True)
+    def test_append_slash_redirect(self):
+        """URLs without trailing slashes should be redirected to their counterparts with trailing slashes"""
+        url_without_slash = reverse("view_hunt", args=[self.hunt.id, self.hunt.slug])
+        if url_without_slash[-1] == '/':
+            url_without_slash = url_without_slash[:-1]
+        url_with_slash = url_without_slash + '/'
+
+        res = self.client.get(url_without_slash)
+        self.assertRedirects(res, url_with_slash, status_code=HTTPStatus.MOVED_PERMANENTLY)
+
+        # Repeat for view_puzzle
+        url_without_slash = reverse(
+            "view_puzzle",
+            args=[self.hunt.id, self.hunt.slug, self.puzzle.id, self.puzzle.slug],
+        )
+        if url_without_slash[-1] == '/':
+            url_without_slash = url_without_slash[:-1]
+        url_with_slash = url_without_slash + '/'
+
+        res = self.client.get(url_without_slash)
+        self.assertRedirects(res, url_with_slash, status_code=HTTPStatus.MOVED_PERMANENTLY)
