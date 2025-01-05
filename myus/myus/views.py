@@ -217,7 +217,6 @@ def leaderboard(request, hunt_id: int, slug: Optional[str] = None):
         ),
     )
 
-    print(teams.query)
     if hunt.leaderboard_style == Hunt.LeaderboardStyle.SPEEDRUN:
         teams = teams.order_by("-score", "solve_time", "last_solve")
     else:
