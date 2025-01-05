@@ -199,3 +199,6 @@ LOGGING = {
         },
     },
 }
+
+# Ensure that URLs are appended with a slash if not found
+APPEND_SLASH = True
