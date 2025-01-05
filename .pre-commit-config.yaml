@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 24.8.0
+    rev: 24.10.0
     hooks:
       - id: black
         # It is recommended to specify the latest version of Python
@@ -9,7 +9,7 @@ repos:
         # https://pre-commit.com/#top_level-default_language_version
         language_version: python3
   - repo: https://github.com/rtts/djhtml
-    rev: '3.0.6'  # replace with the latest tag on GitHub
+    rev: '3.0.7'  # replace with the latest tag on GitHub
     hooks:
       - id: djhtml
       - id: djcss
