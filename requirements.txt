@@ -1,4 +1,4 @@
-black==24.10.0
+black==25.1.0
 bleach==6.2.0
 dj-database-url==2.3.0
 dj-static==0.0.6
